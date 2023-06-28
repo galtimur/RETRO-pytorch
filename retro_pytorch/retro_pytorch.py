@@ -277,7 +277,8 @@ class ChunkedCrossAttention(nn.Module):
         pos_emb = (q_pos_emb, k_pos_emb)
 
         # reshape so we have chunk to chunk attention, without breaking causality
-
+        # n = chunk_size, r = num_neighbors, k = num_chunks
+        
         x = rearrange(x, 'b (k n) d -> (b k) n d', k = num_chunks)
         context = rearrange(context, 'b k r n d -> (b k) (r n) d')
 
@@ -431,6 +432,8 @@ class Decoder(nn.Module):
 
             if exists(cross_attn) and exists(retrieved):
                 if not retrieved_encoded:
+                    
+                    ### rearrangement is needed just to flatten the retrieved chunks to pass them through encoder 
                     retrieved = rearrange(retrieved, 'b k r n d -> (b k r) n d')
                     seq_as_context = repeat(x[:, :seq_index], 'b (k n) d -> (b k r) n d', n = self.chunk_size, r = num_neighbors)
 
@@ -541,10 +544,12 @@ class RETRO(nn.Module):
 
     def forward_without_retrieval(
         self,
-        seq
+        seq,
+        return_loss = False
     ):
-        # embed sequence
-
+        if return_loss:
+            seq, labels = seq[:, :-1], seq[:, 1:]
+        # embed sequence and cut it
         embed = self.token_emb(seq)
         embed = embed[:, :self.seq_len]
 
@@ -558,8 +563,15 @@ class RETRO(nn.Module):
         embed = self.decoder(embed)
 
         # project to logits
+        logits = self.to_logits(embed)
 
-        return self.to_logits(embed)
+        if not return_loss:
+            return logits
+
+        # cross entropy loss
+
+        loss = F.cross_entropy(rearrange(logits, 'b n c -> b c n'), labels, ignore_index = self.pad_id)
+        return loss
 
     def forward(
         self,
@@ -576,9 +588,9 @@ class RETRO(nn.Module):
         """
 
         if not exists(retrieved):
-            return self.forward_without_retrieval(seq)
+            return self.forward_without_retrieval(seq, return_loss = return_loss)
 
-        assert not (return_loss and not self.training), 'must be training if returning loss'
+        #assert not (return_loss and not self.training), 'must be training if returning loss'
 
         # assume padding token id (usually 0.) is to be masked out
 
