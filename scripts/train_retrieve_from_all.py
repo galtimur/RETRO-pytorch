@@ -183,10 +183,14 @@ for seq, docs in tqdm(train_dl):
             f_val.write(str(loss_cur) + "\n")
             f_val.flush()
 
+            print('---- Saving the last model -----')
+            model_file_name = model_folder + f'{model_name}_last.pth'
+            torch.save(retro.state_dict(), model_file_name)
+
             if loss_cur < max_val_loss:
                 max_val_loss = loss_cur
-                print('---- Saving the model -----')
-                model_file_name = model_folder + f'{model_name}_{saved_ind}.pth'
+                print('---- Saving the best model -----')
+                model_file_name = model_folder + f'{model_name}_best_{saved_ind}.pth'
                 torch.save(retro.state_dict(), model_file_name)
                 saved_ind = (saved_ind + 1) % 3
 
