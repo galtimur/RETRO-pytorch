@@ -56,7 +56,7 @@ texts_folder = "../../data/texts_folder/"
 data_folder = "../../data/full_dataset/"
 model_folder = "../../data/models/"
 out_folder = "../out_dir/"
-model_name = "retro_no_retrieve"
+model_name = "retro"
 
 tain_data_path = data_folder + "train.jsonl"
 val_data_path = data_folder + "val.jsonl"
@@ -116,7 +116,6 @@ fetch_neighbours = wrapper_db.fetch_neighbours
 losses_train = []
 losses_val = []
 train_steps = 0
-accumulation_steps = 0
 
 max_val_loss = 10000
 freq_val = 1000
@@ -126,8 +125,8 @@ num_val = 200
 ### Ensure that validation is performed after taking the gradient step.
 freq_val = (freq_val // accumulate_steps) * accumulate_steps
 
-f_train = open(out_folder + "losses_train_optim_no_retrieve.txt", "a")
-f_val = open(out_folder + "losses_val_optim_no_retrieve.txt", "a")
+f_train = open(out_folder + "losses_train_optim.txt", "a")
+f_val = open(out_folder + "losses_val_optim.txt", "a")
 current_time = datetime.now()
 text_start = f"\n------- NEW TRAINING {str(current_time)}, batch size = {batch_size}, batch_accum = {batch_accumulation}, warmup steps = {warmup_steps}, validation frequency = {freq_val}, learining rate = {lr}-------\n"
 f_train.write(text_start)
@@ -140,14 +139,14 @@ saved_ind = 0
 
 val_dl_iter = iter(val_dl)
 
-for seq, docs in tqdm(train_dl, total=total_items // batch_size):
+for seq, docs in tqdm(train_dl, total=total_steps):
     seq = seq.cuda()
-    # retrieved = fetch_neighbours(seq, doc_except=docs)
+    retrieved = fetch_neighbours(seq, doc_except=docs)
 
     train_steps += 1
-    loss = retro(seq, retrieved=None, return_loss=True)
+    loss = retro(seq, retrieved=retrieved, return_loss=True)
 
-    del seq  # , retrieved
+    del seq, retrieved
     # gradient step
     loss.backward()
 
@@ -175,12 +174,12 @@ for seq, docs in tqdm(train_dl, total=total_items // batch_size):
             # print(docs)
             val_step += 1
             seq = seq.cuda()
-            # retrieved = fetch_neighbours(seq, doc_except=docs)
+            retrieved = fetch_neighbours(seq, doc_except=docs)
 
-            loss = retro(seq, retrieved=None, return_loss=True)
+            loss = retro(seq, retrieved=retrieved, return_loss=True)
 
             losses_val_cur.append(loss.item())
-            del loss, seq  # , retrieved
+            del loss, seq, retrieved
 
             if val_step >= num_val:
                 break
