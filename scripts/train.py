@@ -125,8 +125,8 @@ num_val = 200
 ### Ensure that validation is performed after taking the gradient step.
 freq_val = (freq_val // accumulate_steps) * accumulate_steps
 
-f_train = open(out_folder + "losses_train_optim.txt", "a")
-f_val = open(out_folder + "losses_val_optim.txt", "a")
+f_train = open(out_folder + "losses_train_dev.txt", "a")
+f_val = open(out_folder + "losses_val_dev.txt", "a")
 current_time = datetime.now()
 text_start = f"\n------- NEW TRAINING {str(current_time)}, batch size = {batch_size}, batch_accum = {batch_accumulation}, warmup steps = {warmup_steps}, validation frequency = {freq_val}, learining rate = {lr}-------\n"
 f_train.write(text_start)

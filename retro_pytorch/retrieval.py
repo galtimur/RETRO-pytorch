@@ -12,8 +12,7 @@ import faiss
 from autofaiss import build_index
 
 from retro_pytorch.utils import memmap, reset_folder_
-
-# from retro_pytorch.training import aware
+#from retro_pytorch.training import aware
 import jsonlines
 
 # constants
@@ -23,16 +22,14 @@ EOS_ID = 102
 BERT_MODEL_DIM = 768
 BERT_VOCAB_SIZE = 28996
 
-TMP_PATH = Path("./.tmp")
-INDEX_FOLDER_PATH = TMP_PATH / ".index"
-EMBEDDING_TMP_SUBFOLDER = "embeddings"
+TMP_PATH = Path('./.tmp')
+INDEX_FOLDER_PATH = TMP_PATH / '.index'
+EMBEDDING_TMP_SUBFOLDER = 'embeddings'
 
 # helper functions
 
-
 def exists(val):
     return val is not None
-
 
 def range_chunked(max_value, *, batch_size):
     counter = 0
@@ -42,21 +39,18 @@ def range_chunked(max_value, *, batch_size):
         yield slice(counter, curr)
         counter = curr
 
-
 # indexing helper functions
-
 
 def faiss_read_index(path):
     return faiss.read_index(str(path), faiss.IO_FLAG_MMAP | faiss.IO_FLAG_READ_ONLY)
-
 
 # singleton globals
 
 MODEL = None
 TOKENIZER = None
 
-print("---- Using CodeT5p-220M model for embedding----")
-model_path = "../../models/CodeT5p-220M/"
+print('---- Using CodeT5p-220M model for embedding----')
+model_path = '../../models/CodeT5p-220M/'
 TOKENIZER = AutoTokenizer.from_pretrained(model_path)
 MODEL = T5ForConditionalGeneration.from_pretrained(model_path)
 PAD_TOKEN = TOKENIZER.pad_token_id
@@ -71,18 +65,14 @@ SOS_ID = TOKENIZER.bos_token_id
 def get_tokenizer():
     global TOKENIZER
     if not exists(TOKENIZER):
-        TOKENIZER = torch.hub.load(
-            "huggingface/pytorch-transformers", "tokenizer", "bert-base-cased"
-        )
+        TOKENIZER = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-cased')
     return TOKENIZER
 
 
 def get_bert():
     global MODEL, ISDECODER
     if not exists(MODEL):
-        MODEL = torch.hub.load(
-            "huggingface/pytorch-transformers", "model", "bert-base-cased"
-        )
+        MODEL = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-cased')
         ISDECODER = False
     if torch.cuda.is_available():
         MODEL = MODEL.cuda()
@@ -92,7 +82,6 @@ def get_bert():
 
 # tokenize
 
-
 def tokenize(texts, add_special_tokens=True):
     if not isinstance(texts, (list, tuple)):
         texts = [texts]
@@ -100,7 +89,10 @@ def tokenize(texts, add_special_tokens=True):
     tokenizer = get_tokenizer()
 
     encoding = tokenizer.batch_encode_plus(
-        texts, add_special_tokens=add_special_tokens, padding=True, return_tensors="pt"
+        texts,
+        add_special_tokens=add_special_tokens,
+        padding=True,
+        return_tensors='pt'
     )
 
     token_ids = encoding.input_ids
@@ -109,16 +101,17 @@ def tokenize(texts, add_special_tokens=True):
 
 # text to chunks
 
-
 def doc_text_to_chunks_and_seq_indices(
-    *, doc_text, chunk_size=64, seq_len=2048, pad_id=0
+        *,
+        doc_text,
+        chunk_size=64,
+        seq_len=2048,
+        pad_id=0
 ):
-    assert (
-        seq_len % chunk_size
-    ) == 0, "sequence length must be divisible by chunk size"
+    assert (seq_len % chunk_size) == 0, 'sequence length must be divisible by chunk size'
 
     ids = tokenize(doc_text)
-    ids = rearrange(ids, "1 ... -> ...")
+    ids = rearrange(ids, '1 ... -> ...')
 
     text_len = ids.shape[-1]
 
@@ -130,13 +123,13 @@ def doc_text_to_chunks_and_seq_indices(
     # split out very last token
 
     ids, last_token = ids[:-1], ids[-1:]
-    ids = rearrange(ids, "(n c) -> n c", c=chunk_size)
+    ids = rearrange(ids, '(n c) -> n c', c=chunk_size)
 
     # first tokens of chunk [2:] and on will become the last token of chunk [1:]
 
     last_token_per_chunk = ids[1:, 0]
     all_last_tokens = torch.cat((last_token_per_chunk, last_token), dim=0)
-    all_last_tokens = rearrange(all_last_tokens, "n -> n 1")
+    all_last_tokens = rearrange(all_last_tokens, 'n -> n 1')
 
     # append all last tokens to ids for (num_chunks, chunk_size + 1)
 
@@ -152,17 +145,17 @@ def doc_text_to_chunks_and_seq_indices(
 
 
 def text_folder_to_chunks_(
-    *,
-    folder,
-    chunks_memmap_path,
-    seqs_memmap_path,
-    doc_ids_memmap_path,
-    chunk_size=64,
-    seq_len=2048,
-    # glob = '**/*.txt',
-    data_file_paths,
-    max_chunks=1_000_000,
-    max_seqs=100_000,  ### ~ total number of sequences in dataset. Sequence has a context size.
+        *,
+        folder,
+        chunks_memmap_path,
+        seqs_memmap_path,
+        doc_ids_memmap_path,
+        chunk_size=64,
+        seq_len=2048,
+        # glob = '**/*.txt',
+        data_file_paths,
+        max_chunks=1_000_000,
+        max_seqs=100_000  ### ~ total number of sequences in dataset. Sequence has a context size.
 ):
     # paths = sorted([*Path(folder).glob(glob)])
 
@@ -174,21 +167,18 @@ def text_folder_to_chunks_(
     seqs_shape = (max_seqs,)
     doc_ids_shape = (max_chunks,)
 
-    with memmap(
-        chunks_memmap_path, shape=chunks_shape, dtype=np.int32, mode="w+"
-    ) as chunks_memmap, memmap(
-        seqs_memmap_path, shape=seqs_shape, dtype=np.int32, mode="w+"
-    ) as seqs_memmap, memmap(
-        doc_ids_memmap_path, shape=doc_ids_shape, dtype=np.int32, mode="w+"
-    ) as doc_ids_memmap:
-        print("\n ----- Processing code files ------ \n")
+    with memmap(chunks_memmap_path, shape=chunks_shape, dtype=np.int32, mode='w+') as chunks_memmap \
+            , memmap(seqs_memmap_path, shape=seqs_shape, dtype=np.int32, mode='w+') as seqs_memmap \
+            , memmap(doc_ids_memmap_path, shape=doc_ids_shape, dtype=np.int32, mode='w+') as doc_ids_memmap:
+
+        print('\n ----- Processing code files ------ \n')
         for file in data_file_paths:
-            print(f"------ processing {file} -------")
+            print(f'------ processing {file} -------')
             reader = jsonlines.open(file)
             # for path in tqdm(paths):
             for line in tqdm(reader, total=330_000, ncols=100):
-                content = line["contents"]
-                doc_id = line["doc_id"]
+                content = line['contents']
+                doc_id = line['doc_id']
                 # print(content)
                 # print(f'processing {path}')
 
@@ -198,7 +188,7 @@ def text_folder_to_chunks_(
                     # doc_text = path.read_text(),
                     doc_text=content,
                     chunk_size=chunk_size,
-                    seq_len=seq_len,
+                    seq_len=seq_len
                 )
 
                 doc_chunk_len = chunks.shape[0]  # number of chunks in doc
@@ -207,31 +197,34 @@ def text_folder_to_chunks_(
                 # adding chunks, seqs and doc_ids
                 # doc_ids - is just a position of the file in a sequence
 
-                chunks_memmap[
-                    total_chunks : (total_chunks + doc_chunk_len)
-                ] = chunks.numpy()
-                seqs_memmap[total_seqs : (total_seqs + doc_seq_len)] = (
-                    seq.numpy() + total_chunks
-                )
-                doc_ids_memmap[total_chunks : (total_chunks + doc_chunk_len)] = np.full(
-                    (doc_chunk_len,), doc_id
-                )
+                chunks_memmap[total_chunks:(total_chunks + doc_chunk_len)] = chunks.numpy()
+                seqs_memmap[total_seqs:(total_seqs + doc_seq_len)] = seq.numpy() + total_chunks
+                doc_ids_memmap[total_chunks:(total_chunks + doc_chunk_len)] = np.full((doc_chunk_len,), doc_id)
 
                 total_chunks += doc_chunk_len
                 total_seqs += doc_seq_len
                 total_docs += 1
 
-                # if total_docs > 1000:
+                #if total_docs > 1000:
                 #    break
 
-    return dict(chunks=total_chunks, docs=total_docs, seqs=total_seqs)
+    return dict(
+        chunks=total_chunks,
+        docs=total_docs,
+        seqs=total_seqs
+    )
 
 
 # embedding function
 
-
 @torch.no_grad()
-def bert_embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0.0, isdecoder=False):
+def bert_embed(
+        token_ids,
+        return_cls_repr=False,
+        eps=1e-8,
+        pad_id=0.,
+        isdecoder=False
+):
     global PAD_TOKEN
     model = get_bert()
     mask = token_ids != pad_id
@@ -240,8 +233,11 @@ def bert_embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0.0, isdecoder
         token_ids = token_ids.cuda()
         mask = mask.cuda()
     if not isdecoder:
+        
         outputs = model(
-            input_ids=token_ids, attention_mask=mask, output_hidden_states=True
+            input_ids=token_ids,
+            attention_mask=mask,
+            output_hidden_states=True
         )
 
         hidden_state = outputs.hidden_states[-1]
@@ -260,7 +256,7 @@ def bert_embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0.0, isdecoder
         return hidden_state.mean(dim=1)
 
     mask = mask[:, 1:]  # mean all tokens excluding [cls], accounting for length
-    mask = rearrange(mask, "b n -> b n 1")
+    mask = rearrange(mask, 'b n -> b n 1')
 
     numer = (hidden_state[:, 1:] * mask).sum(dim=1)
     denom = mask.sum(dim=1)
@@ -270,32 +266,25 @@ def bert_embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0.0, isdecoder
 
 # chunks to knn
 
-
 def chunks_to_embeddings_(
-    *,
-    num_chunks,
-    chunks_memmap_path,
-    embeddings_memmap_path,
-    chunk_size=64,
-    embed_dim=BERT_MODEL_DIM,
-    batch_size=16,
-    use_cls_repr=False,
-    pad_id=0.0,
+        *,
+        num_chunks,
+        chunks_memmap_path,
+        embeddings_memmap_path,
+        chunk_size=64,
+        embed_dim=BERT_MODEL_DIM,
+        batch_size=16,
+        use_cls_repr=False,
+        pad_id=0.
 ):
     chunks_shape = (num_chunks, chunk_size + 1)
     embed_shape = (num_chunks, embed_dim)
 
-    print("\n -----Embedding ------ \n")
+    print('\n -----Embedding ------ \n')
 
-    with memmap(
-        chunks_memmap_path, shape=chunks_shape, dtype=np.int32
-    ) as chunks, memmap(
-        embeddings_memmap_path, shape=embed_shape, dtype=np.float32, mode="w+"
-    ) as embeddings:
-        for dim_slice in tqdm(
-            range_chunked(num_chunks, batch_size=batch_size),
-            total=num_chunks // batch_size,
-        ):
+    with memmap(chunks_memmap_path, shape=chunks_shape, dtype=np.int32) as chunks \
+            , memmap(embeddings_memmap_path, shape=embed_shape, dtype=np.float32, mode='w+') as embeddings:
+        for dim_slice in tqdm(range_chunked(num_chunks, batch_size=batch_size), total=num_chunks // batch_size):
             batch_chunk_npy = chunks[dim_slice]
 
             batch_chunk = torch.from_numpy(batch_chunk_npy)
@@ -303,44 +292,50 @@ def chunks_to_embeddings_(
             cls_tokens = torch.full((batch_chunk.shape[0], 1), SOS_ID)
             batch_chunk = torch.cat((cls_tokens, batch_chunk), dim=1)
 
-            batch_chunk = batch_chunk[
-                :, :-1
-            ]  # omit last token, the first token of the next chunk, used for autoregressive training
+            batch_chunk = batch_chunk[:,
+                          :-1]  # omit last token, the first token of the next chunk, used for autoregressive training
 
             batch_embed = bert_embed(
-                batch_chunk, return_cls_repr=use_cls_repr, isdecoder=ISDECODER
+                batch_chunk,
+                return_cls_repr=use_cls_repr,
+                isdecoder=ISDECODER
             )
 
             embeddings[dim_slice] = batch_embed.detach().cpu().numpy()
             # print(f'embedded {dim_slice.stop} / {num_chunks}')
 
 
-def memmap_file_to_chunks_(memmap_path, *, folder, shape, dtype, max_rows_per_file=500):
+def memmap_file_to_chunks_(
+        memmap_path,
+        *,
+        folder,
+        shape,
+        dtype,
+        max_rows_per_file=500
+):
     rows, _ = shape
 
-    with memmap(memmap_path, shape=shape, dtype=dtype, mode="r") as f:
+    with memmap(memmap_path, shape=shape, dtype=dtype, mode='r') as f:
         root_path = TMP_PATH / folder
         reset_folder_(root_path)
 
-        print(f"\n ----- saving to {str(root_path)} ----- \n")
-        for ind, dim_slice in tqdm(
-            enumerate(range_chunked(rows, batch_size=max_rows_per_file))
-        ):
-            filename = root_path / f"{ind:05d}.npy"
+        print(f'\n ----- saving to {str(root_path)} ----- \n')
+        for ind, dim_slice in tqdm(enumerate(range_chunked(rows, batch_size=max_rows_per_file))):
+            filename = root_path / f'{ind:05d}.npy'
             data_slice = f[dim_slice]
 
             np.save(str(filename), f[dim_slice])
-    print("\n ----- saving FINISHED ----- \n")
+    print('\n ----- saving FINISHED ----- \n')
 
 
 def index_embeddings(
-    embeddings_folder,
-    *,
-    index_folder,
-    index_file="knn.index",
-    index_infos_file="index_infos.json",
-    max_index_memory_usage="100m",
-    current_memory_available="1G",
+        embeddings_folder,
+        *,
+        index_folder,
+        index_file='knn.index',
+        index_infos_file='index_infos.json',
+        max_index_memory_usage='100m',
+        current_memory_available='1G'
 ):
     embeddings_path = TMP_PATH / embeddings_folder
     index_path = index_folder / index_file
@@ -357,7 +352,7 @@ def index_embeddings(
         make_direct_map=True,
         should_be_memory_mappable=False,
         # use_gpu = torch.cuda.is_available(),# !!!!!!!!!!!!!!
-        use_gpu=False,
+        use_gpu=False
     )
 
     index = faiss_read_index(index_path)
@@ -365,25 +360,24 @@ def index_embeddings(
 
 
 def chunks_to_index_and_embed(
-    *,
-    num_chunks,
-    chunk_size,
-    chunk_memmap_path,
-    use_cls_repr=False,
-    max_rows_per_file=500,
-    chunks_to_embeddings_batch_size=16,
-    embed_dim=BERT_MODEL_DIM,
-    index_folder,
-    index_file="knn.index",
-    **index_kwargs,
+        *,
+        num_chunks,
+        chunk_size,
+        chunk_memmap_path,
+        use_cls_repr=False,
+        max_rows_per_file=500,
+        chunks_to_embeddings_batch_size=16,
+        embed_dim=BERT_MODEL_DIM,
+        index_folder,
+        index_file='knn.index',
+        **index_kwargs
 ):
-    embedding_path = f"{chunk_memmap_path}.embedded"
+    embedding_path = f'{chunk_memmap_path}.embedded'
     embed_shape = (num_chunks, embed_dim)
 
     if Path(embedding_path).exists():
         print(
-            f"----- \n Embeddings file exist: {embedding_path} \n proceeding without creating new embeddings \n ------"
-        )
+            f'----- \n Embeddings file exist: {embedding_path} \n proceeding without creating new embeddings \n ------')
     else:
         chunks_to_embeddings_(
             num_chunks=num_chunks,
@@ -392,12 +386,12 @@ def chunks_to_index_and_embed(
             embeddings_memmap_path=embedding_path,
             use_cls_repr=use_cls_repr,
             batch_size=chunks_to_embeddings_batch_size,
-            embed_dim=embed_dim,
+            embed_dim=embed_dim
         )
-
+        
     index_path = index_folder / index_file
     if index_path.exists():
-        print("Found index file. Reading")
+        print('Found index file. Reading')
         index = faiss_read_index(index_path)
     else:
         memmap_file_to_chunks_(
@@ -405,76 +399,68 @@ def chunks_to_index_and_embed(
             shape=embed_shape,
             dtype=np.float32,
             folder=EMBEDDING_TMP_SUBFOLDER,
-            max_rows_per_file=max_rows_per_file,
+            max_rows_per_file=max_rows_per_file
         )
-
+    
         index = index_embeddings(
             embeddings_folder=EMBEDDING_TMP_SUBFOLDER,
             index_folder=index_folder,
             index_file=index_file,
-            **index_kwargs,
+            **index_kwargs
         )
 
-    embeddings = np.memmap(
-        embedding_path, shape=embed_shape, dtype=np.float32, mode="r"
-    )
+    embeddings = np.memmap(embedding_path, shape=embed_shape, dtype=np.float32, mode='r')
     return index, embeddings
 
 
 def chunks_to_precalculated_knn_(
-    *,
-    num_nearest_neighbors,
-    num_chunks,
-    chunk_size,
-    chunk_memmap_path,
-    doc_ids_memmap_path,
-    use_cls_repr=False,
-    max_rows_per_file=500,
-    chunks_to_embeddings_batch_size=16,
-    embed_dim=BERT_MODEL_DIM,
-    num_extra_neighbors=10,
-    force_reprocess=False,
-    index_file="knn.index",
-    **index_kwargs,
+        *,
+        num_nearest_neighbors,
+        num_chunks,
+        chunk_size,
+        chunk_memmap_path,
+        doc_ids_memmap_path,
+        use_cls_repr=False,
+        max_rows_per_file=500,
+        chunks_to_embeddings_batch_size=16,
+        embed_dim=BERT_MODEL_DIM,
+        num_extra_neighbors=10,
+        force_reprocess=False,
+        index_file='knn.index',
+        **index_kwargs
 ):
     chunk_path = Path(chunk_memmap_path)
-    knn_path = chunk_path.parents[0] / f"{chunk_path.stem}.knn{chunk_path.suffix}"
+    knn_path = chunk_path.parents[0] / f'{chunk_path.stem}.knn{chunk_path.suffix}'
     index_path = chunk_path.parents[0] / index_file
 
     # early return knn path and faiss index
     # unless if force_reprocess is True
 
     if index_path.exists() and knn_path.exists() and not force_reprocess:
-        print(
-            f"Found index file and {chunk_path.stem}.knn{chunk_path.suffix}. Loading."
-        )
+        print(f'Found index file and {chunk_path.stem}.knn{chunk_path.suffix}. Loading.')
         index = faiss_read_index(index_path)
         return knn_path, index
 
-    # fetch the faiss index and calculated embeddings for the chunks
-
+    # fetch the faiss index and calculated embeddings for the chunks    
+    
     index, embeddings = chunks_to_index_and_embed(
         num_chunks=num_chunks,
         chunk_size=chunk_size,
         chunk_memmap_path=chunk_memmap_path,
         index_folder=chunk_path.parents[0],
         index_file=index_file,
-        **index_kwargs,
+        **index_kwargs
     )
 
     total_neighbors_to_fetch = num_extra_neighbors + num_nearest_neighbors + 1
 
-    print("\n---- Calculating KNNs -----\n")
+    print('\n---- Calculating KNNs -----\n')
 
-    with memmap(
-        knn_path, shape=(num_chunks, num_nearest_neighbors), dtype=np.int32, mode="w+"
-    ) as knns, memmap(
-        doc_ids_memmap_path, shape=(num_chunks,), dtype=np.int32, mode="r"
-    ) as doc_ids:
-        for dim_slice in tqdm(
-            range_chunked(num_chunks, batch_size=max_rows_per_file),
-            total=num_chunks // max_rows_per_file,
-        ):
+    with memmap(knn_path, shape=(num_chunks, num_nearest_neighbors), dtype=np.int32, mode='w+') as knns \
+            , memmap(doc_ids_memmap_path, shape=(num_chunks,), dtype=np.int32, mode='r') as doc_ids:
+
+        for dim_slice in tqdm(range_chunked(num_chunks, batch_size=max_rows_per_file),
+                              total=num_chunks // max_rows_per_file):
             query_vector = embeddings[dim_slice]
 
             distances, indices = index.search(query_vector, k=total_neighbors_to_fetch)
@@ -503,5 +489,5 @@ def chunks_to_precalculated_knn_(
 
             # print(f'knns calculated for {dim_slice.stop} / {num_chunks}')
 
-    print(f"knn saved to {knn_path}")
+    print(f'knn saved to {knn_path}')
     return knn_path, index
